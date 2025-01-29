@@ -22,8 +22,8 @@ public class ScreeningReview {
     @JsonBackReference
     private CandidateEvaluation candidateEvaluation;
 
-//    @Column(nullable = false)
-//    private String reviewType; // ✅ Store reviewType here (e.g., Pre-Screening, Behavioral Screening)
+    @Column(nullable = false)
+    private String reviewType; // ✅ Store reviewType here (e.g., Pre-Screening, Behavioral Screening)
     private int overallRating;
     private String status;
     private String overallComments;

@@ -6,5 +6,5 @@ import java.util.List;
 @Data
 public class CandidateEvaluationRequest {
     private GeneralReviewRequest generalReview;
-    private ScreeningReviewRequest screeningReviews;
+    private List<ScreeningReviewRequest> screeningReviews;
 }

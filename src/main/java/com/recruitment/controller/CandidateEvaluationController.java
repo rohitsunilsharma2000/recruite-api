@@ -35,9 +35,7 @@ public class CandidateEvaluationController {
         this.candidateEvaluationRepository = candidateEvaluationRepository;
         this.questionBankTemplateRepository = questionBankTemplateRepository;
         this.candidateEvaluationService = candidateEvaluationService;
-    }
-
-    /**
+    }/**
      * 2) Get all evaluations
      */
     @GetMapping
