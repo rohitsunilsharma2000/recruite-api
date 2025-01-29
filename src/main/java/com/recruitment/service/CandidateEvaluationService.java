@@ -1,5 +1,6 @@
 package com.recruitment.service;
 
+import com.recruitment.dto.CandidateEvaluationRequest;
 import com.recruitment.model.*;
 import com.recruitment.repository.CandidateEvaluationRepository;
 import com.recruitment.repository.CandidateRepository;
@@ -8,9 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -34,75 +33,70 @@ public class CandidateEvaluationService {
 
     /**
      * Creates or updates a CandidateEvaluation by parsing a raw JSON payload.
-     *
-     * @param candidateId ID of the Candidate
-     * @param payload     Raw JSON as a map
-     * @return The saved CandidateEvaluation
      */
-    public CandidateEvaluation evaluateCandidate( Long candidateId, Map<String, Object> payload) {
-        log.info("Evaluating candidate ID: {}", candidateId);
+    @Transactional
+    public CandidateEvaluation evaluateCandidate(Long candidateId, CandidateEvaluationRequest request) {
+        log.info("Evaluating candidate with ID: {}", candidateId);
 
+        // 1) Fetch Candidate
         Candidate candidate = candidateRepository.findById(candidateId)
-                                                 .orElseThrow(() -> new IllegalArgumentException("Candidate not found with ID " + candidateId));
+                                                 .orElseThrow(() -> new IllegalArgumentException("Candidate not found with ID: " + candidateId));
 
+        // 2) Create CandidateEvaluation entity
         CandidateEvaluation evaluation = new CandidateEvaluation();
         evaluation.setCandidate(candidate);
 
-        // parse "generalReview"
-        Map<String, Object> generalReviewMap = (Map<String, Object>) payload.get("generalReview");
-        if (generalReviewMap != null) {
-            GeneralReview gr = new GeneralReview();
-            gr.setRating(((Number) generalReviewMap.getOrDefault("rating", 0)).intValue());
-            gr.setCandidateStatus((String) generalReviewMap.getOrDefault("candidateStatus", ""));
-            gr.setOverallComments((String) generalReviewMap.getOrDefault("overallComments", ""));
-            evaluation.setGeneralReview(gr);
+        // 3) Parse General Review
+        if (request.getGeneralReview() != null) {
+            GeneralReview generalReview = new GeneralReview();
+            generalReview.setRating(request.getGeneralReview().getRating());
+            generalReview.setCandidateStatus(request.getGeneralReview().getCandidateStatus());
+            generalReview.setOverallComments(request.getGeneralReview().getOverallComments());
+            evaluation.setGeneralReview(generalReview);
         }
 
-        // parse "screeningReviews"
-        Map<String, Object> screeningReviewsMap = (Map<String, Object>) payload.get("screeningReviews");
-        if (screeningReviewsMap != null) {
-            // optional overallRating, status, overallComments
-            int overallRating = ((Number) screeningReviewsMap.getOrDefault("overallRating", 0)).intValue();
-            String status = (String) screeningReviewsMap.getOrDefault("status", "");
-            String overallComments = (String) screeningReviewsMap.getOrDefault("overallComments", "");
+        // 4) Parse Screening Reviews
+        if (request.getScreeningReviews() != null) {
+            ScreeningReview screeningReview = new ScreeningReview();
 
-            List<Map<String, Object>> candidateGeneralAssessment =
-                    (List<Map<String, Object>>) screeningReviewsMap.get("CandidateGeneralAssessment");
+            screeningReview.setOverallRating(request.getScreeningReviews().getOverallRating());
+            screeningReview.setStatus(request.getScreeningReviews().getStatus());
+            screeningReview.setOverallComments(request.getScreeningReviews().getOverallComments());
 
-            if (candidateGeneralAssessment != null) {
-                List<ScreeningReview> screeningList = new ArrayList<>();
-                for (Map<String, Object> assessment : candidateGeneralAssessment) {
-                    ScreeningReview sr = new ScreeningReview();
-                    sr.setCandidateEvaluation(evaluation);
-                    sr.setOverallRating(overallRating);
-                    sr.setStatus(status);
-                    sr.setOverallComments(overallComments);
+            screeningReview.setCandidateEvaluation(evaluation);
 
-                    String competencyType = (String) assessment.getOrDefault("competencyType", "");
-                    sr.setReviewType(competencyType);
+            // 4a) Map Question Reviews
+            List<QuestionReview> questionReviews = Optional.ofNullable(request.getScreeningReviews().getCandidateGeneralAssessment())
+                                                           .orElse(Collections.emptyList())
+                                                           .stream()
+                                                           .map(qrRequest -> {
+                                                               QuestionReview qr = new QuestionReview();
+                                                               qr.setScreeningReview(screeningReview);
+                                                               qr.setRating(qrRequest.getRating());
+                                                               qr.setComments(qrRequest.getComments());
 
-                    // parse questionReviews
-                    List<Map<String, Object>> questionReviews =
-                            (List<Map<String, Object>>) assessment.get("questionReviews");
-                    if (questionReviews != null) {
-                        List<QuestionReview> questionReviewEntities = questionReviews.stream()
-                                                                                     .map(qrMap -> mapToQuestionReview(sr, qrMap))
-                                                                                     .collect(Collectors.toList());
+                                                               // Fetch and set QuestionBankTemplate
+                                                               QuestionBankTemplate questionBankTemplate = questionBankTemplateRepository
+                                                                       .findById(qrRequest.getQuestionBankTemplateId())
+                                                                       .orElseThrow(() -> new IllegalArgumentException(
+                                                                               "QuestionBankTemplate not found with ID: " + qrRequest.getQuestionBankTemplateId()
+                                                                       ));
+                                                               qr.setQuestionBankTemplate(questionBankTemplate);
 
-                        sr.setQuestionReviews(questionReviewEntities);
-                    }
+                                                               return qr;
+                                                           })
+                                                           .collect(Collectors.toList());
 
-                    screeningList.add(sr);
-                }
-                evaluation.setScreeningReviews(screeningList);
-            }
+            screeningReview.setQuestionReviews(questionReviews);
+            evaluation.setScreeningReviews(List.of(screeningReview));
         }
 
-        CandidateEvaluation saved = candidateEvaluationRepository.save(evaluation);
-        log.info("Saved CandidateEvaluation with ID: {}", saved.getId());
-        return saved;
+        // 5) Save the evaluation
+        CandidateEvaluation savedEvaluation = candidateEvaluationRepository.save(evaluation);
+        log.info("Successfully saved evaluation ID: {}", savedEvaluation.getId());
+
+        return savedEvaluation;
     }
-
     private QuestionReview mapToQuestionReview(ScreeningReview screeningReview, Map<String, Object> qrMap) {
         QuestionReview qr = new QuestionReview();
         qr.setScreeningReview(screeningReview);
