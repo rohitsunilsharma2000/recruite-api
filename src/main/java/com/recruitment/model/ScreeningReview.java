@@ -22,7 +22,8 @@ public class ScreeningReview {
     @JsonBackReference
     private CandidateEvaluation candidateEvaluation;
 
-    private String reviewType;
+//    @Column(nullable = false)
+//    private String reviewType; // ✅ Store reviewType here (e.g., Pre-Screening, Behavioral Screening)
     private int overallRating;
     private String status;
     private String overallComments;
@@ -30,4 +31,6 @@ public class ScreeningReview {
     @OneToMany(mappedBy = "screeningReview", cascade = CascadeType.ALL, orphanRemoval = true)
     @JsonInclude(JsonInclude.Include.NON_EMPTY)
     private List<QuestionReview> questionReviews;
+
+
 }

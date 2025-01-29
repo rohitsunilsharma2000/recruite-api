@@ -29,4 +29,6 @@ public class CandidateEvaluation {
     @OneToMany(mappedBy = "candidateEvaluation", cascade = CascadeType.ALL, orphanRemoval = true)
     @JsonInclude(JsonInclude.Include.NON_EMPTY)
     private List<ScreeningReview> screeningReviews;
+
+
 }
